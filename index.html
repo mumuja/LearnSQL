@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS50 SQL Interactive Lab | Portfolio Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .code-font { font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 h-screen flex flex-col overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900/95 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0 z-10 gap-3 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/40 text-emerald-400 px-2.5 py-1.5 rounded-lg font-bold code-font text-xs shadow-inner">
+        SQLite WASM
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-sm sm:text-base text-white tracking-tight">CS50 SQL Interactive Lab</h1>
+          <span id="persistence-badge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700" title="Estado de almacenamiento persistente">Local</span>
+        </div>
+        <p class="text-[11px] text-slate-400 hidden md:block">Entorno Relacional • Perfiles Multi-usuario • Cloud Sync</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- User Switcher -->
+      <div class="flex items-center bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs gap-1.5">
+        <span class="text-slate-400">👤</span>
+        <select id="user-select" onchange="switchUser(this.value)" class="bg-transparent text-white font-semibold focus:outline-none cursor-pointer pr-1"></select>
+        <button onclick="promptNewUser()" title="Crear nuevo perfil de usuario" class="text-emerald-400 hover:text-emerald-300 font-bold px-1 border-l border-slate-800">+</button>
+      </div>
+
+      <!-- Progress Pill -->
+      <div class="hidden lg:flex items-center gap-2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
+        <div class="w-20 h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <span id="progress-text" class="text-emerald-400 font-bold code-font">0/18</span>
+      </div>
+
+      <!-- Cloud Sync / Backup Modal Trigger -->
+      <button onclick="openSyncModal()" id="sync-btn" class="bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-medium px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+        <span>☁️ Guardar / Sync</span>
+      </button>
+
+      <!-- CSV Upload Button -->
+      <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1">
+        <span>📂 CSV</span>
+        <input type="file" id="csv-upload" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+      </label>
+
+      <!-- Final Exam Mode Toggle -->
+      <button onclick="openExamModal()" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+        <span>🏆 Examen</span>
+      </button>
+
+      <!-- Reset DB -->
+      <button onclick="resetDatabase()" title="Restaurar tablas iniciales" class="text-xs bg-slate-800 hover:bg-red-950/60 hover:text-red-300 hover:border-red-800 text-slate-400 px-2 py-1.5 rounded-lg border border-slate-700 transition">
+        ↻ BD
+      </button>
+    </div>
+  </header>
+
+  <!-- Main 3-Column Workspace -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Left Sidebar: Modules -->
+    <nav class="w-60 bg-slate-900/40 border-r border-slate-800 flex flex-col shrink-0 overflow-y-auto" id="lesson-nav"></nav>
+
+    <!-- Center Panel: Theory & Multi-Level Challenges -->
+    <main class="w-[46%] border-r border-slate-800 overflow-y-auto p-6 space-y-6" id="lesson-content"></main>
+
+    <!-- Right Panel: Live SQL Sandbox & Output -->
+    <section class="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+      
+      <!-- Active Tables & Views Bar -->
+      <div class="bg-slate-900/70 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-xs gap-2 overflow-x-auto shrink-0">
+        <span class="text-slate-400 font-semibold shrink-0">Esquema activo:</span>
+        <div class="flex gap-1.5 flex-wrap" id="schema-badges"></div>
+      </div>
+
+      <!-- SQL Editor -->
+      <div class="p-4 flex flex-col gap-2.5 border-b border-slate-800 shrink-0 bg-slate-900/20">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <label for="sql-editor" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Consola SQLite</label>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-500 code-font">
+            <span id="exec-time">Listo</span>
+            <span>Ctrl + Enter</span>
+          </div>
+        </div>
+        
+        <textarea id="sql-editor" rows="6" spellcheck="false"
+          class="w-full bg-slate-900 border border-slate-700/80 rounded-lg p-3 text-sm text-emerald-300 code-font focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 resize-y leading-relaxed"
+          placeholder="SELECT * FROM &quot;properties&quot; LIMIT 5;"></textarea>
+        
+        <div class="flex items-center justify-between pt-0.5">
+          <div class="flex gap-2">
+            <button onclick="runUserQuery()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-lg transition shadow-lg shadow-emerald-950 flex items-center gap-1.5">
+              <span>▶ Ejecutar SQL</span>
+            </button>
+            <button onclick="validateCurrentChallenge()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2 rounded-lg transition shadow-lg shadow-indigo-950 flex items-center gap-1.5">
+              <span>✓ Validar Reto Actual</span>
+            </button>
+          </div>
+          <button onclick="document.getElementById('sql-editor').value = ''" class="text-xs text-slate-400 hover:text-white transition">
+            Limpiar
+          </button>
+        </div>
+      </div>
+
+      <!-- Feedback Banner -->
+      <div id="feedback-banner" class="hidden px-4 py-2.5 text-xs font-medium border-b flex items-center justify-between"></div>
+
+      <!-- Results Output Area -->
+      <div class="flex-1 overflow-auto p-4" id="results-container">
+        <div class="h-full flex flex-col items-center justify-center text-slate-500 text-xs space-y-2">
+          <p class="text-slate-400 font-medium">Motor SQLite inicializado en memoria.</p>
+          <p>Haz clic en cualquier tabla arriba para inspeccionarla o prueba un ejemplo de la lección.</p>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- Persistence, Cloud Sync & Backup Modal -->
+  <div id="sync-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h2 class="font-bold text-white text-base">Persistencia y Respaldo de Progreso</h2>
+          <p class="text-xs text-slate-400">Usuario activo: <span id="sync-modal-user" class="text-emerald-400 font-bold"></span></p>
+        </div>
+        <button onclick="closeSyncModal()" class="text-slate-400 hover:text-white text-lg font-bold px-2">✕</button>
+      </div>
+
+      <div class="p-6 space-y-5 text-xs">
+        <!-- Local File Export / Import -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+          <h3 class="font-bold text-slate-200 uppercase tracking-wider">1. Respaldo Portátil (JSON)</h3>
+          <p class="text-slate-400 leading-relaxed">Descarga tu progreso en un archivo para evitar cualquier límite de almacenamiento del navegador o moverlo a otra computadora.</p>
+          <div class="flex gap-2">
+            <button onclick="exportProgressJSON()" class="bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-lg border border-slate-700 font-medium transition">
+              ⬇ Exportar Progreso (.json)
+            </button>
+            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-lg border border-slate-700 font-medium transition">
+              ⬆ Importar Progreso
+              <input type="file" accept=".json" class="hidden" onchange="importProgressJSON(event)">
+            </label>
+          </div>
+        </div>
+
+        <!-- Optional Supabase Cloud Sync -->
+        <div class="bg-slate-950 border border-sky-500/20 rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-sky-400 uppercase tracking-wider">2. Sincronización Nube (Supabase)</h3>
+            <span id="cloud-status-tag" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">No configurado</span>
+          </div>
+          <p class="text-slate-400 leading-relaxed">Conecta tu proyecto Supabase para guardar indefinidamente el progreso de todos los usuarios en PostgreSQL.</p>
+          
+          <div class="space-y-2">
+            <input type="text" id="sb-url" placeholder="https://tu-proyecto.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 code-font focus:outline-none focus:border-sky-500">
+            <input type="password" id="sb-key" placeholder="Supabase Anon Public Key" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 code-font focus:outline-none focus:border-sky-500">
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <button onclick="saveSupabaseConfig()" class="bg-sky-600 hover:bg-sky-500 text-white font-semibold px-4 py-2 rounded-lg transition">
+              Conectar y Sincronizar Ahora
+            </button>
+            <button onclick="pullFromSupabase()" class="text-sky-400 hover:underline">
+              ↻ Descargar de la nube
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Final Exam Modal -->
+  <div id="exam-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">🏆</span>
+          <div>
+            <h2 class="font-bold text-white text-base">Examen Final de Certificación SQL</h2>
+            <p class="text-xs text-slate-400">Candidato: <span id="exam-user-label" class="text-amber-300 font-semibold"></span> • 8 preguntas técnicas</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <span id="exam-timer" class="code-font text-sm font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/30">15:00</span>
+          <button onclick="closeExamModal()" class="text-slate-400 hover:text-white text-lg font-bold px-2">✕</button>
+        </div>
+      </div>
+      
+      <div class="p-6 overflow-y-auto flex-1 space-y-5" id="exam-body"></div>
+
+      <div class="px-6 py-4 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between" id="exam-footer">
+        <span class="text-xs text-slate-400" id="exam-status-text">Las consultas SQL se evalúan contra el esquema limpio original.</span>
+        <div class="flex gap-2">
+          <button onclick="closeExamModal()" class="px-4 py-2 rounded-lg text-xs text-slate-300 hover:bg-slate-800 transition">Cerrar</button>
+          <button onclick="submitFinalExam()" id="submit-exam-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-5 py-2 rounded-lg transition">Finalizar y Calificar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let db = null;
+    let supabaseClient = null;
+    let currentLessonIndex = 0;
+    let currentChallengeTab = 0;
+    let examInterval = null;
+
+    // Multi-User State Store (Persisted in localStorage + Persistent Storage API + Optional Supabase)
+    const STORAGE_KEY = 'cs50_sql_users_store_v3';
+    const SB_CONFIG_KEY = 'cs50_sql_supabase_cfg';
+
+    let appStore = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {
+      activeUser: 'Eduardo',
+      users: {
+        'Eduardo': { completed: [], bestExamScore: 0, lastActive: new Date().toISOString() }
+      }
+    };
+
+    function saveLocalStore() {
+      appStore.users[appStore.activeUser].lastActive = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appStore));
+    }
+
+    function getCurrentUserData() {
+      if (!appStore.users[appStore.activeUser]) {
+        appStore.users[appStore.activeUser] = { completed: [], bestExamScore: 0, lastActive: new Date().toISOString() };
+      }
+      return appStore.users[appStore.activeUser];
+    }
+
+    // Request Browser Persistent Storage so data isn't evicted after 7 days of inactivity
+    async function requestDurableStorage() {
+      const badge = document.getElementById('persistence-badge');
+      if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        if (isPersisted) {
+          badge.textContent = '🔒 Almacenamiento Durable';
+          badge.classList.replace('text-slate-400', 'text-emerald-400');
+          badge.classList.replace('border-slate-700', 'border-emerald-500/30');
+        } else {
+          badge.textContent = 'Local (Exportable)';
+        }
+      }
+    }
+
+    // User Management
+    function renderUserDropdown() {
+      const select = document.getElementById('user-select');
+      select.innerHTML = Object.keys(appStore.users).map(u => 
+        `<option value="${u}" ${u === appStore.activeUser ? 'selected' : ''} class="bg-slate-900 text-white">${u}</option>`
+      ).join('');
+    }
+
+    function switchUser(username) {
+      appStore.activeUser = username;
+      saveLocalStore();
+      updateProgressUI();
+      loadLesson(currentLessonIndex, currentChallengeTab);
+      if (supabaseClient) pullFromSupabase(true);
+      showFeedback(`Perfil cambiado a: ${username}`, 'info');
+    }
+
+    function promptNewUser() {
+      const name = prompt("Ingresa el nombre del nuevo usuario:");
+      if (!name || !name.trim()) return;
+      const cleanName = name.trim();
+      if (!appStore.users[cleanName]) {
+        appStore.users[cleanName] = { completed: [], bestExamScore: 0, lastActive: new Date().toISOString() };
+      }
+      appStore.activeUser = cleanName;
+      saveLocalStore();
+      renderUserDropdown();
+      updateProgressUI();
+      loadLesson(currentLessonIndex, currentChallengeTab);
+      if (supabaseClient) pushToSupabase();
+      showFeedback(`Perfil "${cleanName}" creado y activado.`, 'success');
+    }
+
+    // Export / Import JSON Backup
+    function exportProgressJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appStore, null, 2));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `cs50_sql_backup_${appStore.activeUser.toLowerCase()}.json`);
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+    }
+
+    function importProgressJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported && imported.users) {
+            appStore = imported;
+            saveLocalStore();
+            renderUserDropdown();
+            updateProgressUI();
+            loadLesson(currentLessonIndex, currentChallengeTab);
+            closeSyncModal();
+            showFeedback("Progreso restaurado exitosamente desde el respaldo JSON.", "success");
+          } else {
+            alert("El archivo JSON no tiene un formato válido de progreso.");
+          }
+        } catch (err) {
+          alert("Error leyendo archivo JSON: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Supabase Integration
+    function initSupabaseFromStorage() {
+      const cfg = JSON.parse(localStorage.getItem(SB_CONFIG_KEY) || 'null');
+      if (cfg && cfg.url && cfg.key && window.supabase) {
+        document.getElementById('sb-url').value = cfg.url;
+        document.getElementById('sb-key').value = cfg.key;
+        supabaseClient = window.supabase.createClient(cfg.url, cfg.key);
+        updateCloudUI(true);
+        pullFromSupabase(true);
+      }
+    }
+
+    function updateCloudUI(connected) {
+      const tag = document.getElementById('cloud-status-tag');
+      const btn = document.getElementById('sync-btn');
+      if (connected) {
+        tag.textContent = '● Conectado a PostgreSQL';
+        tag.className = 'text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold';
+        btn.innerHTML = '<span>☁️ Sync Activo</span>';
+        btn.classList.replace('text-sky-300', 'text-emerald-300');
+      }
+    }
+
+    async function saveSupabaseConfig() {
+      const url = document.getElementById('sb-url').value.trim();
+      const key = document.getElementById('sb-key').value.trim();
+      if (!url || !key) return alert("Ingresa tanto la URL como la Anon Key de Supabase.");
+
+      localStorage.setItem(SB_CONFIG_KEY, JSON.stringify({ url, key }));
+      supabaseClient = window.supabase.createClient(url, key);
+      updateCloudUI(true);
+      await pushToSupabase();
+      closeSyncModal();
+      showFeedback("Sincronizado con Supabase PostgreSQL correctamente.", "success");
+    }
+
+    async function pushToSupabase() {
+      if (!supabaseClient) return;
+      const userData = getCurrentUserData();
+      await supabaseClient.from('sql_lab_progress').upsert({
+        username: appStore.activeUser,
+        completed_challenges: userData.completed,
+        exam_best_score: userData.bestExamScore || 0,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    async function pullFromSupabase(silent = false) {
+      if (!supabaseClient) return;
+      const { data, error } = await supabaseClient
+        .from('sql_lab_progress')
+        .select('*')
+        .eq('username', appStore.activeUser)
+        .maybeSingle();
+
+      if (!error && data) {
+        const localData = getCurrentUserData();
+        // Merge completed challenges without losing local work
+        const merged = Array.from(new Set([...localData.completed, ...(data.completed_challenges || [])]));
+        localData.completed = merged;
+        localData.bestExamScore = Math.max(localData.bestExamScore || 0, data.exam_best_score || 0);
+        saveLocalStore();
+        updateProgressUI();
+        loadLesson(currentLessonIndex, currentChallengeTab);
+        if (!silent) showFeedback(`Progreso de "${appStore.activeUser}" descargado de la nube.`, "success");
+      } else if (!error && !data) {
+        await pushToSupabase();
+      }
+    }
+
+    function openSyncModal() {
+      document.getElementById('sync-modal-user').textContent = appStore.activeUser;
+      document.getElementById('sync-modal').classList.remove('hidden');
+    }
+
+    function closeSyncModal() {
+      document.getElementById('sync-modal').classList.add('hidden');
+    }
+
+    // Seed Database (Real Estate & Land Portfolio Management)
+    const INIT_SQL = `
+      CREATE TABLE "agents" (
+        "id" INTEGER PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "region" TEXT NOT NULL,
+        "commission_rate" REAL NOT NULL DEFAULT 0.05
+      );
+
+      CREATE TABLE "properties" (
+        "id" INTEGER PRIMARY KEY,
+        "title" TEXT NOT NULL,
+        "state" TEXT NOT NULL,
+        "county" TEXT NOT NULL,
+        "acres" REAL NOT NULL,
+        "price" INTEGER NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'Available',
+        "drone_video" TEXT,
+        "agent_id" INTEGER,
+        FOREIGN KEY("agent_id") REFERENCES "agents"("id")
+      );
+
+      CREATE TABLE "sales" (
+        "id" INTEGER PRIMARY KEY,
+        "property_id" INTEGER,
+        "buyer_name" TEXT NOT NULL,
+        "sale_price" INTEGER NOT NULL,
+        "sale_date" TEXT DEFAULT CURRENT_DATE,
+        FOREIGN KEY("property_id") REFERENCES "properties"("id")
+      );
+
+      INSERT INTO "agents" ("id", "name", "region", "commission_rate") VALUES
+        (1, 'Carlos Mendez', 'Southwest', 0.06),
+        (2, 'Elena Rostova', 'Southeast', 0.05),
+        (3, 'Marcus Vance', 'Mountain', 0.07),
+        (4, 'Sofia Navarro', 'Southwest', 0.05);
+
+      INSERT INTO "properties" ("id", "title", "state", "county", "acres", "price", "status", "drone_video", "agent_id") VALUES
+        (1, 'Sunset Mesa Ranch', 'Texas', 'Hudspeth', 12.5, 45000, 'Available', 'https://cdn.drone/vid1.mp4', 1),
+        (2, 'Pine Creek Lot', 'Colorado', 'Costilla', 5.0, 32000, 'Sold', 'https://cdn.drone/vid2.mp4', 3),
+        (3, 'Everglades Edge', 'Florida', 'Hendry', 2.5, 28000, 'Available', NULL, 2),
+        (4, 'Red Rock Acreage', 'Arizona', 'Apache', 20.0, 60000, 'Available', 'https://cdn.drone/vid4.mp4', 1),
+        (5, 'Blue Ridge Timber', 'Georgia', 'Fannin', 8.2, 39000, 'Pending', NULL, 2),
+        (6, 'Lone Star Pasture', 'Texas', 'Terrell', 15.0, 52000, 'Available', NULL, 1),
+        (7, 'Aspen Valley View', 'Colorado', 'Park', 3.5, 41000, 'Sold', 'https://cdn.drone/vid7.mp4', 3),
+        (8, 'Canyon Vista Ranch', 'Arizona', 'Navajo', 10.0, 36000, 'Available', NULL, 4),
+        (9, 'Palmetto Grove', 'Florida', 'Putnam', 1.2, 19500, 'Available', 'https://cdn.drone/vid9.mp4', 2);
+
+      INSERT INTO "sales" ("id", "property_id", "buyer_name", "sale_price", "sale_date") VALUES
+        (1, 2, 'John Doe', 31000, '2026-10-15'),
+        (2, 7, 'Sarah Connor', 40500, '2026-11-02');
+    `;
+
+    // 6 Modules with 3 Progressive Challenges each (18 total)
+    const lessons = [
+      {
+        id: 0,
+        title: "Lecture 0: Querying",
+        subtitle: "SELECT, WHERE, LIKE, ORDER BY y Agregaciones",
+        content: `
+          <p class="text-slate-300 leading-relaxed">SQL permite consultar millones de filas usando algoritmos optimizados. A diferencia de una hoja de cálculo donde buscas con Ctrl+F, SQL filtra, ordena y agrega datos declarativamente.</p>
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">Reglas Fundamentales</h3>
+            <ul class="list-disc list-inside text-xs text-slate-300 space-y-1.5">
+              <li><strong>Comillas:</strong> Dobles <code>"columna"</code> para identificadores; simples <code>'texto'</code> para strings. Números van sin comillas.</li>
+              <li><strong>Valores Nulos:</strong> Usa <code>IS NULL</code> o <code>IS NOT NULL</code>. Cualquier comparación con <code>= NULL</code> devuelve falso.</li>
+              <li><strong>Patrones (LIKE):</strong> <code>%</code> equivale a cero o más caracteres; <code>_</code> equivale a exactamente un carácter.</li>
+              <li><strong>Agregación:</strong> <code>COUNT(*)</code> cuenta todas las filas; <code>COUNT("col")</code> ignora los <code>NULL</code>; <code>COUNT(DISTINCT "col")</code> elimina duplicados.</li>
+            </ul>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider">Ejemplos para probar:</h3>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">SELECT "title", "state", "acres" FROM "properties" WHERE "title" LIKE '%Ranch%';</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">SELECT COUNT(DISTINCT "state") AS "estados_activos", ROUND(AVG("price"), 2) AS "precio_medio" FROM "properties";</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+          </div>
+        `,
+        challenges: [
+          {
+            id: "L0_C1",
+            level: "Fácil",
+            title: "Lotes disponibles en Texas",
+            description: "Obtén el <code>title</code> y <code>price</code> de todas las propiedades en <code>'Texas'</code> cuyo estado sea <code>'Available'</code>.",
+            hint: "SELECT \"title\", \"price\" FROM \"properties\" WHERE \"state\" = 'Texas' AND \"status\" = 'Available';",
+            solutionQuery: `SELECT "title", "price" FROM "properties" WHERE "state" = 'Texas' AND "status" = 'Available';`
+          },
+          {
+            id: "L0_C2",
+            level: "Medio",
+            title: "Sin video de dron y ordenados",
+            description: "Lista el <code>title</code>, <code>state</code> y <code>acres</code> de las propiedades que NO tienen <code>drone_video</code> (es <code>NULL</code>) y tienen al menos <code>5.0</code> acres, ordenadas de mayor a menor <code>acres</code>.",
+            hint: "Usa WHERE \"drone_video\" IS NULL AND \"acres\" >= 5.0 ORDER BY \"acres\" DESC",
+            solutionQuery: `SELECT "title", "state", "acres" FROM "properties" WHERE "drone_video" IS NULL AND "acres" >= 5.0 ORDER BY "acres" DESC;`
+          },
+          {
+            id: "L0_C3",
+            level: "Difícil",
+            title: "Métricas de inventario disponible",
+            description: "Calcula en una sola fila cuántos condados (<code>county</code>) distintos tienen propiedades <code>'Available'</code> (alias <code>total_counties</code>) y el precio máximo entre ellas (alias <code>max_price</code>).",
+            hint: "SELECT COUNT(DISTINCT \"county\") AS \"total_counties\", MAX(\"price\") AS \"max_price\" FROM \"properties\" WHERE \"status\" = 'Available';",
+            solutionQuery: `SELECT COUNT(DISTINCT "county") AS "total_counties", MAX("price") AS "max_price" FROM "properties" WHERE "status" = 'Available';`
+          }
+        ]
+      },
+      {
+        id: 1,
+        title: "Lecture 1: Relating",
+        subtitle: "Llaves, Subqueries, JOINs, Sets y GROUP BY",
+        content: `
+          <p class="text-slate-300 leading-relaxed">Para evitar redundancia, cada entidad vive en su propia tabla y se conecta mediante <strong>Primary Keys</strong> y <strong>Foreign Keys</strong>.</p>
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">Conexión y Agrupación</h3>
+            <ul class="list-disc list-inside text-xs text-slate-300 space-y-1.5">
+              <li><strong>Subqueries:</strong> Consultas dentro de paréntesis. Usa <code>IN</code> si devuelve varias filas o <code>=</code> si devuelve un único valor.</li>
+              <li><strong>INNER JOIN vs LEFT JOIN:</strong> <code>JOIN</code> descarta filas sin coincidencia; <code>LEFT JOIN</code> conserva todas las filas de la tabla izquierda rellenando con <code>NULL</code>.</li>
+              <li><strong>GROUP BY & HAVING:</strong> Agrupa filas por categoría y filtra los grupos resultantes usando <code>HAVING</code>.</li>
+              <li><strong>Operadores de Conjuntos:</strong> <code>UNION</code> (une sin duplicados), <code>INTERSECT</code> (comunes), <code>EXCEPT</code> (diferencia).</li>
+            </ul>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider">Ejemplos para probar:</h3>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">SELECT "state", COUNT(*) AS "lotes", SUM("price") AS "valor_total" FROM "properties" GROUP BY "state" HAVING "lotes" >= 2;</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">SELECT "name" FROM "agents" EXCEPT SELECT "agents"."name" FROM "agents" JOIN "properties" ON "agents"."id" = "properties"."agent_id" WHERE "status" = 'Sold';</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+          </div>
+        `,
+        challenges: [
+          {
+            id: "L1_C1",
+            level: "Fácil",
+            title: "Subquery por región",
+            description: "Usando una <strong>subquery</strong> (sin JOIN), obtén el <code>title</code> y <code>state</code> de las propiedades asignadas a agentes de la región <code>'Southwest'</code>.",
+            hint: "WHERE \"agent_id\" IN (SELECT \"id\" FROM \"agents\" WHERE \"region\" = 'Southwest')",
+            solutionQuery: `SELECT "title", "state" FROM "properties" WHERE "agent_id" IN (SELECT "id" FROM "agents" WHERE "region" = 'Southwest');`
+          },
+          {
+            id: "L1_C2",
+            level: "Medio",
+            title: "JOIN de Ventas y Agentes",
+            description: "Une <code>sales</code>, <code>properties</code> y <code>agents</code> para mostrar <code>sales.buyer_name</code>, <code>properties.title</code> y <code>agents.name</code> (alias <code>agent_name</code>).",
+            hint: "Encadena dos JOIN: sales -> properties ON sales.property_id = properties.id -> agents ON properties.agent_id = agents.id",
+            solutionQuery: `SELECT "sales"."buyer_name", "properties"."title", "agents"."name" AS "agent_name" FROM "sales" JOIN "properties" ON "sales"."property_id" = "properties"."id" JOIN "agents" ON "properties"."agent_id" = "agents"."id";`
+          },
+          {
+            id: "L1_C3",
+            level: "Difícil",
+            title: "Portafolio activo por agente",
+            description: "Muestra <code>agents.name</code> y el valor total de sus propiedades disponibles (<code>SUM(properties.price)</code> como <code>portfolio_value</code>), filtrando solo agentes con un valor disponible mayor a <code>50000</code>.",
+            hint: "Filtra WHERE properties.status = 'Available', agrupa por agents.name y usa HAVING portfolio_value > 50000",
+            solutionQuery: `SELECT "agents"."name", SUM("properties"."price") AS "portfolio_value" FROM "agents" JOIN "properties" ON "agents"."id" = "properties"."agent_id" WHERE "properties"."status" = 'Available' GROUP BY "agents"."name" HAVING "portfolio_value" > 50000;`
+          }
+        ]
+      },
+      {
+        id: 2,
+        title: "Lecture 2: Designing",
+        subtitle: "Normalización, Tipos y Constraints",
+        content: `
+          <p class="text-slate-300 leading-relaxed">Normalizar significa dividir tablas monolíticas en entidades independientes. Las restricciones (<em>constraints</em>) actúan como reglas de validación en la base de datos.</p>
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">Restricciones y Alteraciones</h3>
+            <ul class="list-disc list-inside text-xs text-slate-300 space-y-1.5">
+              <li><strong>Storage Classes (SQLite):</strong> <code>NULL</code>, <code>INTEGER</code>, <code>REAL</code>, <code>TEXT</code>, <code>BLOB</code> (y <code>NUMERIC</code> para fechas/decimales).</li>
+              <li><strong>Column Constraints:</strong> <code>NOT NULL</code>, <code>UNIQUE</code>, <code>DEFAULT</code> y <code>CHECK(condición)</code>.</li>
+              <li><strong>ALTER TABLE:</strong> Permite <code>RENAME TO</code>, <code>ADD COLUMN</code>, <code>RENAME COLUMN</code> y <code>DROP COLUMN</code>.</li>
+            </ul>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider">Inspeccionar esquemas:</h3>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">SELECT "name", "sql" FROM "sqlite_master" WHERE "type" = 'table';</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+          </div>
+        `,
+        challenges: [
+          {
+            id: "L2_C1",
+            level: "Fácil",
+            title: "Tabla de Clientes Potenciales (Leads)",
+            description: "Crea una tabla llamada <code>leads</code> con: <code>id</code> (INTEGER PRIMARY KEY), <code>full_name</code> (TEXT NOT NULL) y <code>email</code> (TEXT NOT NULL UNIQUE).",
+            hint: "CREATE TABLE \"leads\" (\"id\" INTEGER PRIMARY KEY, \"full_name\" TEXT NOT NULL, \"email\" TEXT NOT NULL UNIQUE);",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='leads';`);
+              if (!res.length) return { ok: false, msg: "La tabla 'leads' no existe." };
+              const sql = res[0].values[0][0].toUpperCase();
+              if (sql.includes("UNIQUE") && sql.includes("NOT NULL")) {
+                return { ok: true, msg: "¡Tabla 'leads' creada con restricciones UNIQUE y NOT NULL!" };
+              }
+              return { ok: false, msg: "Faltan restricciones NOT NULL o UNIQUE en la definición." };
+            }
+          },
+          {
+            id: "L2_C2",
+            level: "Medio",
+            title: "Tabla con CHECK y FOREIGN KEY",
+            description: "Crea una tabla <code>offers</code> con: <code>id</code> (INTEGER PRIMARY KEY), <code>property_id</code> (INTEGER con FOREIGN KEY a <code>properties(id)</code>), y <code>offer_amount</code> (INTEGER NOT NULL CHECK(<code>offer_amount</code> > 0)).",
+            hint: "Incluye CHECK(\"offer_amount\" > 0) y FOREIGN KEY(\"property_id\") REFERENCES \"properties\"(\"id\")",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='offers';`);
+              if (!res.length) return { ok: false, msg: "La tabla 'offers' no existe." };
+              const sql = res[0].values[0][0].toUpperCase();
+              if (sql.includes("CHECK") && sql.includes("FOREIGN KEY")) {
+                return { ok: true, msg: "¡Tabla 'offers' diseñada correctamente con CHECK y FK!" };
+              }
+              return { ok: false, msg: "Verifica que incluiste tanto CHECK como FOREIGN KEY." };
+            }
+          },
+          {
+            id: "L2_C3",
+            level: "Difícil",
+            title: "Evolucionar esquema con ALTER TABLE",
+            description: "Agrega una nueva columna llamada <code>zoning</code> de tipo <code>TEXT</code> con valor por defecto <code>'Agricultural'</code> a la tabla existente <code>properties</code>.",
+            hint: "ALTER TABLE \"properties\" ADD COLUMN \"zoning\" TEXT DEFAULT 'Agricultural';",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`PRAGMA table_info("properties");`);
+              const cols = res[0].values.map(r => r[1]);
+              if (cols.includes("zoning")) {
+                return { ok: true, msg: "¡Columna 'zoning' agregada exitosamente a properties!" };
+              }
+              return { ok: false, msg: "No se encontró la columna 'zoning' en la tabla 'properties'." };
+            }
+          }
+        ]
+      },
+      {
+        id: 3,
+        title: "Lecture 3: Writing",
+        subtitle: "INSERT, UPDATE, DELETE, Triggers y Soft Deletes",
+        content: `
+          <p class="text-slate-300 leading-relaxed">Manipulación de datos y automatización mediante <strong>Triggers</strong>. En sistemas reales, rara vez se usa <code>DELETE</code> físico; se prefiere <em>Soft Delete</em> para conservar auditoría.</p>
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">Triggers y Borrado Lógico</h3>
+            <ul class="list-disc list-inside text-xs text-slate-300 space-y-1.5">
+              <li><strong>Triggers:</strong> <code>CREATE TRIGGER "nombre" AFTER INSERT ON "tabla" BEGIN ... END;</code>.</li>
+              <li><strong>OLD y NEW:</strong> Dentro de un trigger, <code>NEW."col"</code> accede al dato insertado/actualizado y <code>OLD."col"</code> al dato previo/eliminado.</li>
+              <li><strong>Integridad Referencial:</strong> <code>ON DELETE CASCADE</code> elimina registros hijos automáticamente al borrar el padre.</li>
+            </ul>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider">Ejemplo de Trigger de auditoría:</h3>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">CREATE TABLE "audit_log" ("id" INTEGER PRIMARY KEY, "msg" TEXT);</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+          </div>
+        `,
+        challenges: [
+          {
+            id: "L3_C1",
+            level: "Fácil",
+            title: "Inserción múltiple en una sentencia",
+            description: "Inserta en una sola instrucción <code>INSERT INTO</code> dos nuevos agentes en <code>agents</code>: <code>'Diego Silva'</code> (región <code>'Northwest'</code>) y <code>'Laura Gómez'</code> (región <code>'Midwest'</code>).",
+            hint: "INSERT INTO \"agents\" (\"name\", \"region\") VALUES ('Diego Silva', 'Northwest'), ('Laura Gómez', 'Midwest');",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT * FROM "agents" WHERE "name" IN ('Diego Silva', 'Laura Gómez');`);
+              if (res.length && res[0].values.length === 2) {
+                return { ok: true, msg: "¡Ambos agentes insertados correctamente!" };
+              }
+              return { ok: false, msg: "Asegúrate de insertar exactamente a 'Diego Silva' y 'Laura Gómez'." };
+            }
+          },
+          {
+            id: "L3_C2",
+            level: "Medio",
+            title: "Soft Delete de propiedad",
+            description: "Realiza un <em>Soft Delete</em> sobre la propiedad <code>'Blue Ridge Timber'</code> actualizando su columna <code>status</code> a <code>'Archived'</code>.",
+            hint: "UPDATE \"properties\" SET \"status\" = 'Archived' WHERE \"title\" = 'Blue Ridge Timber';",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT "status" FROM "properties" WHERE "title" = 'Blue Ridge Timber';`);
+              if (res.length && res[0].values[0][0] === 'Archived') {
+                return { ok: true, msg: "¡Propiedad archivada sin perder su registro histórico!" };
+              }
+              return { ok: false, msg: "El estado de 'Blue Ridge Timber' aún no es 'Archived'." };
+            }
+          },
+          {
+            id: "L3_C3",
+            level: "Difícil",
+            title: "Automatizar ventas con TRIGGER",
+            description: "Crea un trigger llamado <code>sync_property_sold</code> que se ejecute <code>AFTER INSERT ON "sales"</code> y actualice automáticamente <code>status = 'Sold'</code> en <code>properties</code> donde <code>id = NEW."property_id"</code>.",
+            hint: "CREATE TRIGGER \"sync_property_sold\" AFTER INSERT ON \"sales\" BEGIN UPDATE \"properties\" SET \"status\" = 'Sold' WHERE \"id\" = NEW.\"property_id\"; END;",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT name FROM sqlite_master WHERE type='trigger' AND name='sync_property_sold';`);
+              if (!res.length || res[0].values.length === 0) {
+                return { ok: false, msg: "No se encontró el trigger 'sync_property_sold'." };
+              }
+              db.run(`INSERT INTO "sales" ("property_id", "buyer_name", "sale_price") VALUES (3, 'Test Trigger', 28000);`);
+              const checkProp = db.exec(`SELECT "status" FROM "properties" WHERE "id" = 3;`);
+              if (checkProp[0].values[0][0] === 'Sold') {
+                return { ok: true, msg: "¡Trigger verificado! Al registrar una venta, el lote pasa a 'Sold' automáticamente." };
+              }
+              return { ok: false, msg: "El trigger existe pero no actualizó el status de la propiedad." };
+            }
+          }
+        ]
+      },
+      {
+        id: 4,
+        title: "Lecture 4: Viewing",
+        subtitle: "Views, CTEs, Particionamiento y Seguridad",
+        content: `
+          <p class="text-slate-300 leading-relaxed">Las <strong>Views</strong> son consultas guardadas que se comportan como tablas virtuales. Simplifican el código, particionan datos y protegen información confidencial (PII).</p>
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">Vistas vs CTEs</h3>
+            <ul class="list-disc list-inside text-xs text-slate-300 space-y-1.5">
+              <li><strong>CREATE VIEW:</strong> Persiste en el esquema y siempre refleja datos en vivo de las tablas base.</li>
+              <li><strong>CTE (Common Table Expression):</strong> <code>WITH "nombre" AS (SELECT ...) SELECT ...</code>. Vive únicamente durante la ejecución de esa consulta.</li>
+              <li><strong>Seguridad:</strong> Permite exponer columnas no sensibles (ej. anonimizando nombres de compradores).</li>
+            </ul>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider">Ejemplo de CTE:</h3>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">WITH "big_lots" AS (SELECT * FROM "properties" WHERE "acres" >= 10) SELECT "title", "acres", "price" FROM "big_lots";</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+          </div>
+        `,
+        challenges: [
+          {
+            id: "L4_C1",
+            level: "Fácil",
+            title: "Vista particionada de disponibles",
+            description: "Crea una vista llamada <code>available_inventory</code> que seleccione <code>id</code>, <code>title</code>, <code>state</code> y <code>price</code> únicamente de las propiedades con <code>status = 'Available'</code>.",
+            hint: "CREATE VIEW \"available_inventory\" AS SELECT \"id\", \"title\", \"state\", \"price\" FROM \"properties\" WHERE \"status\" = 'Available';",
+            isDDL: true,
+            validateCustom: () => {
+              try {
+                const res = db.exec(`SELECT * FROM "available_inventory";`);
+                const cols = res[0].columns;
+                if (cols.length === 4 && cols.includes("title") && cols.includes("price")) {
+                  return { ok: true, msg: "¡Vista 'available_inventory' creada correctamente!" };
+                }
+                return { ok: false, msg: "Revisa que la vista tenga exactamente las 4 columnas pedidas." };
+              } catch (e) {
+                return { ok: false, msg: "Error al consultar la vista: " + e.message };
+              }
+            }
+          },
+          {
+            id: "L4_C2",
+            level: "Medio",
+            title: "Vista anonimizada (Seguridad PII)",
+            description: "Crea una vista llamada <code>anonymized_sales</code> que muestre <code>id</code>, <code>property_id</code>, <code>sale_price</code> y una columna literal <code>'Confidential'</code> con alias <code>buyer_name</code>.",
+            hint: "CREATE VIEW \"anonymized_sales\" AS SELECT \"id\", \"property_id\", \"sale_price\", 'Confidential' AS \"buyer_name\" FROM \"sales\";",
+            isDDL: true,
+            validateCustom: () => {
+              try {
+                const res = db.exec(`SELECT "buyer_name" FROM "anonymized_sales" LIMIT 1;`);
+                if (res[0].values[0][0] === 'Confidential') {
+                  return { ok: true, msg: "¡Vista segura creada! Los nombres reales quedaron protegidos." };
+                }
+                return { ok: false, msg: "La columna buyer_name debe devolver 'Confidential'." };
+              } catch (e) {
+                return { ok: false, msg: "Error: " + e.message };
+              }
+            }
+          },
+          {
+            id: "L4_C3",
+            level: "Difícil",
+            title: "Consulta de dos niveles con CTE",
+            description: "Escribe una consulta con un <strong>CTE</strong> llamado <code>state_totals</code> que calcule la suma de <code>price</code> por <code>state</code> (como <code>total_val</code>), y luego en el <code>SELECT</code> principal obtén el promedio redondeado a 2 decimales de <code>total_val</code> (alias <code>avg_state_portfolio</code>).",
+            hint: "WITH \"state_totals\" AS (SELECT \"state\", SUM(\"price\") AS \"total_val\" FROM \"properties\" GROUP BY \"state\") SELECT ROUND(AVG(\"total_val\"), 2) AS \"avg_state_portfolio\" FROM \"state_totals\";",
+            solutionQuery: `WITH "state_totals" AS (SELECT "state", SUM("price") AS "total_val" FROM "properties" GROUP BY "state") SELECT ROUND(AVG("total_val"), 2) AS "avg_state_portfolio" FROM "state_totals";`
+          }
+        ]
+      },
+      {
+        id: 5,
+        title: "Lecture 5 & 6: Optimizing & Scaling",
+        subtitle: "Índices (B-Trees), Transacciones ACID y Escala",
+        content: `
+          <p class="text-slate-300 leading-relaxed">Optimizar consiste en evitar escaneos completos de tabla (<code>SCAN</code>) mediante árboles balanceados (<strong>B-Trees</strong>) y garantizar atomicidad en operaciones críticas con transacciones.</p>
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 text-xs uppercase tracking-wider">Rendimiento y Producción</h3>
+            <ul class="list-disc list-inside text-xs text-slate-300 space-y-1.5">
+              <li><strong>Covering Index:</strong> Índice compuesto que contiene todas las columnas requeridas por la consulta, evitando leer la tabla principal.</li>
+              <li><strong>Partial Index:</strong> Índice con cláusula <code>WHERE</code> para indexar solo filas activas y ahorrar espacio.</li>
+              <li><strong>ACID & Transacciones:</strong> <code>BEGIN TRANSACTION; ... COMMIT;</code> (o <code>ROLLBACK;</code>) evita <em>race conditions</em> e inconsistencias.</li>
+              <li><strong>Seguridad en Servidores:</strong> <em>Prepared Statements</em> (<code>WHERE id = ?</code>) bloquean ataques de <strong>SQL Injection</strong>.</li>
+            </ul>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider">Analizar Plan de Ejecución:</h3>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex justify-between items-center gap-2">
+              <code class="text-xs text-emerald-300 code-font">EXPLAIN QUERY PLAN SELECT "title", "price" FROM "properties" WHERE "state" = 'Texas';</code>
+              <button onclick="loadAndRun(this.previousElementSibling.textContent)" class="shrink-0 text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-white">Ejecutar</button>
+            </div>
+          </div>
+        `,
+        challenges: [
+          {
+            id: "L5_C1",
+            level: "Fácil",
+            title: "Índice simple por estado",
+            description: "Crea un índice llamado <code>idx_state</code> sobre la columna <code>state</code> de la tabla <code>properties</code>.",
+            hint: "CREATE INDEX \"idx_state\" ON \"properties\" (\"state\");",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_state';`);
+              if (res.length && res[0].values.length > 0) {
+                return { ok: true, msg: "¡Índice 'idx_state' creado! Ejecuta EXPLAIN QUERY PLAN para ver SEARCH USING INDEX." };
+              }
+              return { ok: false, msg: "No se encontró el índice 'idx_state'." };
+            }
+          },
+          {
+            id: "L5_C2",
+            level: "Medio",
+            title: "Índice Parcial para inventario activo",
+            description: "Crea un índice parcial llamado <code>idx_available_price</code> sobre <code>properties(price)</code> únicamente para las filas donde <code>status = 'Available'</code>.",
+            hint: "CREATE INDEX \"idx_available_price\" ON \"properties\" (\"price\") WHERE \"status\" = 'Available';",
+            isDDL: true,
+            validateCustom: () => {
+              const res = db.exec(`SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_available_price';`);
+              if (res.length && res[0].values[0][0].toUpperCase().includes("WHERE")) {
+                return { ok: true, msg: "¡Índice parcial creado con éxito!" };
+              }
+              return { ok: false, msg: "Verifica el nombre 'idx_available_price' y su cláusula WHERE." };
+            }
+          },
+          {
+            id: "L5_C3",
+            level: "Difícil",
+            title: "Transacción Atómica de Venta",
+            description: "Ejecuta una transacción completa (<code>BEGIN TRANSACTION; ... COMMIT;</code>) que inserte una venta para <code>property_id = 4</code>, comprador <code>'Elena Gilbert'</code>, <code>sale_price = 59000</code>, y actualice en <code>properties</code> su <code>status = 'Sold'</code>.",
+            hint: "BEGIN TRANSACTION; INSERT INTO \"sales\" ...; UPDATE \"properties\" SET \"status\" = 'Sold' WHERE \"id\" = 4; COMMIT;",
+            isDDL: true,
+            validateCustom: () => {
+              const s = db.exec(`SELECT * FROM "sales" WHERE "property_id" = 4 AND "buyer_name" = 'Elena Gilbert';`);
+              const p = db.exec(`SELECT "status" FROM "properties" WHERE "id" = 4;`);
+              if (s.length && s[0].values.length > 0 && p[0].values[0][0] === 'Sold') {
+                return { ok: true, msg: "¡Transacción ACID ejecutada con éxito!" };
+              }
+              return { ok: false, msg: "Verifica que la venta de propiedad 4 exista y su status sea 'Sold'." };
+            }
+          }
+        ]
+      }
+    ];
+
+    // Final Exam Questions
+    const examQuestions = [
+      {
+        id: "Q1",
+        type: "sql",
+        points: 15,
+        prompt: "Escribe una consulta que devuelva el <code>title</code> y <code>acres</code> de las propiedades en <code>'Arizona'</code> o <code>'Texas'</code> con más de <code>11</code> acres, ordenadas por <code>acres</code> descendente.",
+        expectedQuery: `SELECT "title", "acres" FROM "properties" WHERE ("state" = 'Arizona' OR "state" = 'Texas') AND "acres" > 11 ORDER BY "acres" DESC;`
+      },
+      {
+        id: "Q2",
+        type: "sql",
+        points: 15,
+        prompt: "Calcula cuántos lotes tiene cada agente asignado. Muestra <code>agents.name</code> y el conteo como <code>total_lots</code> (incluye solo agentes que tengan al menos 2 lotes).",
+        expectedQuery: `SELECT "agents"."name", COUNT("properties"."id") AS "total_lots" FROM "agents" JOIN "properties" ON "agents"."id" = "properties"."agent_id" GROUP BY "agents"."name" HAVING "total_lots" >= 2;`
+      },
+      {
+        id: "Q3",
+        type: "sql",
+        points: 15,
+        prompt: "Usando un operador de conjuntos (<code>EXCEPT</code>), obtén los <code>id</code> de todas las propiedades en <code>properties</code> que todavía NO aparecen en la tabla <code>sales</code>.",
+        expectedQuery: `SELECT "id" FROM "properties" EXCEPT SELECT "property_id" FROM "sales";`
+      },
+      {
+        id: "Q4",
+        type: "sql",
+        points: 15,
+        prompt: "Calcula la comisión estimada de cada venta (<code>sales.sale_price * agents.commission_rate</code> redondeada a 2 decimales con alias <code>commission</code>) junto con <code>agents.name</code>.",
+        expectedQuery: `SELECT "agents"."name", ROUND("sales"."sale_price" * "agents"."commission_rate", 2) AS "commission" FROM "sales" JOIN "properties" ON "sales"."property_id" = "properties"."id" JOIN "agents" ON "properties"."agent_id" = "agents"."id";`
+      },
+      {
+        id: "Q5",
+        type: "mcq",
+        points: 10,
+        prompt: "¿Por qué crear índices en TODAS las columnas de una tabla con millones de registros suele ser una mala decisión de arquitectura?",
+        options: [
+          "Porque SQLite solo permite un máximo de 2 índices por tabla.",
+          "Porque cada índice ocupa espacio adicional en disco (B-Tree) y ralentiza las operaciones de escritura (INSERT, UPDATE, DELETE).",
+          "Porque los índices bloquean las consultas SELECT simultáneas."
+        ],
+        correctIndex: 1
+      },
+      {
+        id: "Q6",
+        type: "mcq",
+        points: 10,
+        prompt: "¿Cuál es la diferencia fundamental entre las cláusulas WHERE y HAVING?",
+        options: [
+          "WHERE filtra filas individuales antes de agrupar; HAVING filtra grupos resultantes después de aplicar GROUP BY.",
+          "HAVING solo funciona con números enteros y WHERE solo con cadenas de texto.",
+          "No existe diferencia; son sinónimos intercambiables en el estándar ANSI SQL."
+        ],
+        correctIndex: 0
+      },
+      {
+        id: "Q7",
+        type: "mcq",
+        points: 10,
+        prompt: "¿Qué propiedad ACID garantiza que si una transferencia bancaria falla a mitad de camino (tras sumar a una cuenta pero antes de restar a la otra), ningún cambio quede guardado?",
+        options: [
+          "Isolation (Aislamiento)",
+          "Durability (Durabilidad)",
+          "Atomicity (Atomicidad)"
+        ],
+        correctIndex: 2
+      },
+      {
+        id: "Q8",
+        type: "mcq",
+        points: 10,
+        prompt: "¿Cuál es la defensa estándar contra ataques de SQL Injection en aplicaciones conectadas a MySQL o PostgreSQL?",
+        options: [
+          "Usar COMILLAS DOBLES alrededor de todas las contraseñas.",
+          "Utilizar Prepared Statements (consultas parametrizadas con placeholders como ? o $1) en lugar de concatenar strings.",
+          "Ejecutar el comando VACUUM después de cada inicio de sesión."
+        ],
+        correctIndex: 1
+      }
+    ];
+
+    // Initialize App
+    async function initApp() {
+      await requestDurableStorage();
+      renderUserDropdown();
+      initSupabaseFromStorage();
+
+      const SQL = await initSqlJs({
+        locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
+      });
+      window.SQL = SQL;
+      createFreshDB();
+      renderNav();
+      loadLesson(0);
+      updateProgressUI();
+    }
+
+    function createFreshDB() {
+      if (db) db.close();
+      db = new window.SQL.Database();
+      db.run(INIT_SQL);
+      updateSchemaBadges();
+    }
+
+    function resetDatabase() {
+      createFreshDB();
+      showFeedback("Base de datos restaurada al estado inicial.", "info");
+      renderResults([]);
+    }
+
+    // CSV Parser & Dynamic Table Creator
+    function handleCSVUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const text = e.target.result.trim();
+          const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+          if (lines.length < 2) {
+            showFeedback("El archivo CSV debe contener al menos una fila de encabezados y una fila de datos.", "error");
+            return;
+          }
+
+          const rawName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
+          const tableName = rawName || "imported_csv";
+
+          const parseLine = (row) => {
+            const result = [];
+            let cur = '', inQuotes = false;
+            for (let i = 0; i < row.length; i++) {
+              const ch = row[i];
+              if (ch === '"') { inQuotes = !inQuotes; }
+              else if (ch === ',' && !inQuotes) { result.push(cur.trim()); cur = ''; }
+              else { cur += ch; }
+            }
+            result.push(cur.trim());
+            return result;
+          };
+
+          const headers = parseLine(lines[0]).map((h, idx) => h.replace(/[^a-zA-Z0-9_]/g, "_") || `col_${idx}`);
+          const sampleRow = parseLine(lines[1]);
+
+          const colDefs = headers.map((h, idx) => {
+            const val = sampleRow[idx];
+            if (val !== "" && !isNaN(val)) {
+              return `"${h}" ${val.includes('.') ? 'REAL' : 'INTEGER'}`;
+            }
+            return `"${h}" TEXT`;
+          });
+
+          db.run(`DROP TABLE IF EXISTS "${tableName}";`);
+          db.run(`CREATE TABLE "${tableName}" (${colDefs.join(', ')});`);
+
+          const placeholders = headers.map(() => '?').join(', ');
+          const stmt = db.prepare(`INSERT INTO "${tableName}" VALUES (${placeholders});`);
+
+          db.run("BEGIN TRANSACTION;");
+          for (let i = 1; i < lines.length; i++) {
+            const vals = parseLine(lines[i]).map(v => v === '' ? null : (!isNaN(v) ? Number(v) : v));
+            while (vals.length < headers.length) vals.push(null);
+            stmt.run(vals.slice(0, headers.length));
+          }
+          db.run("COMMIT;");
+          stmt.free();
+
+          updateSchemaBadges();
+          const previewQuery = `SELECT * FROM "${tableName}" LIMIT 15;`;
+          loadQuery(previewQuery);
+          runUserQuery();
+          showFeedback(`CSV importado como tabla "${tableName}" (${lines.length - 1} filas).`, "success");
+        } catch (err) {
+          showFeedback(`Error al importar CSV: ${err.message}`, "error");
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function updateSchemaBadges() {
+      const res = db.exec(`SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%';`);
+      const container = document.getElementById('schema-badges');
+      container.innerHTML = '';
+      if (res.length) {
+        res[0].values.forEach(([name, type]) => {
+          const wrap = document.createElement('div');
+          wrap.className = "inline-flex items-center bg-slate-800 border border-slate-700 rounded overflow-hidden";
+          
+          const btn = document.createElement('button');
+          btn.className = `px-2 py-0.5 code-font transition ${type === 'view' ? 'text-indigo-300 hover:bg-slate-700' : 'text-emerald-400 hover:bg-slate-700'}`;
+          btn.textContent = name;
+          btn.title = `Consultar ${type}: ${name}`;
+          btn.onclick = () => loadAndRun(`SELECT * FROM "${name}";`);
+
+          const infoBtn = document.createElement('button');
+          infoBtn.className = "px-1.5 py-0.5 text-slate-400 hover:text-white hover:bg-slate-700 border-l border-slate-700 text-[10px]";
+          infoBtn.textContent = "ⓘ";
+          infoBtn.title = `Ver .schema de ${name}`;
+          infoBtn.onclick = () => loadAndRun(`SELECT "sql" AS "schema_definition" FROM "sqlite_master" WHERE "name" = '${name}';`);
+
+          wrap.appendChild(btn);
+          wrap.appendChild(infoBtn);
+          container.appendChild(wrap);
+        });
+      }
+    }
+
+    function renderNav() {
+      const userCompleted = getCurrentUserData().completed;
+      const nav = document.getElementById('lesson-nav');
+      nav.innerHTML = lessons.map((lesson, idx) => {
+        const doneCount = lesson.challenges.filter(c => userCompleted.includes(c.id)).length;
+        const isAllDone = doneCount === lesson.challenges.length;
+        const isActive = idx === currentLessonIndex;
+        return `
+          <button onclick="loadLesson(${idx})" class="text-left p-4 border-b border-slate-800/80 transition flex items-start justify-between gap-2 ${isActive ? 'bg-slate-800/90 border-l-4 border-l-emerald-500' : 'hover:bg-slate-900'}">
+            <div>
+              <div class="text-xs font-bold ${isActive ? 'text-emerald-400' : 'text-slate-300'}">${lesson.title}</div>
+              <div class="text-[11px] text-slate-500 mt-0.5 line-clamp-1">${lesson.subtitle}</div>
+            </div>
+            <span class="text-[11px] px-1.5 py-0.5 rounded code-font ${isAllDone ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'bg-slate-800 text-slate-400'}">
+              ${doneCount}/${lesson.challenges.length}
+            </span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function loadLesson(index, challengeIdx = 0) {
+      currentLessonIndex = index;
+      currentChallengeTab = challengeIdx;
+      const lesson = lessons[index];
+      const userCompleted = getCurrentUserData().completed;
+      renderNav();
+      hideFeedback();
+
+      const activeChallenge = lesson.challenges[currentChallengeTab];
+      const isChallengeCompleted = userCompleted.includes(activeChallenge.id);
+
+      const container = document.getElementById('lesson-content');
+      container.innerHTML = `
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">${lesson.title}</span>
+          <h2 class="text-xl font-bold text-white mt-1">${lesson.subtitle}</h2>
+        </div>
+
+        <div class="space-y-4 text-xs leading-relaxed">
+          ${lesson.content}
+        </div>
+
+        <div class="bg-slate-900/90 border border-indigo-500/30 rounded-xl overflow-hidden shadow-lg mt-6">
+          <div class="flex border-b border-slate-800 bg-slate-950/60">
+            ${lesson.challenges.map((ch, idx) => {
+              const done = userCompleted.includes(ch.id);
+              const active = idx === currentChallengeTab;
+              return `
+                <button onclick="loadLesson(${index}, ${idx})" class="flex-1 py-2.5 px-3 text-xs font-semibold transition flex items-center justify-center gap-1.5 border-b-2 ${active ? 'border-indigo-500 text-white bg-indigo-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}">
+                  <span>${ch.level}</span>
+                  ${done ? '<span class="text-emerald-400">✓</span>' : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          <div class="p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="font-bold text-indigo-300 text-sm">🎯 ${activeChallenge.title}</h3>
+              ${isChallengeCompleted ? '<span class="text-[11px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-semibold">Completado</span>' : ''}
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">${activeChallenge.description}</p>
+            <details class="text-xs text-slate-400 cursor-pointer pt-1">
+              <summary class="hover:text-indigo-300 font-semibold select-none">Mostrar pista de sintaxis</summary>
+              <p class="mt-2 p-2.5 bg-slate-950 border border-slate-800 rounded code-font text-indigo-200">${activeChallenge.hint}</p>
+            </details>
+          </div>
+        </div>
+      `;
+    }
+
+    function loadQuery(sql) {
+      document.getElementById('sql-editor').value = sql;
+    }
+
+    function loadAndRun(sql) {
+      loadQuery(sql);
+      runUserQuery();
+    }
+
+    function runUserQuery() {
+      const query = document.getElementById('sql-editor').value.trim();
+      if (!query) return;
+      hideFeedback();
+
+      const t0 = performance.now();
+      try {
+        const results = db.exec(query);
+        const t1 = performance.now();
+        document.getElementById('exec-time').textContent = `${(t1 - t0).toFixed(2)} ms`;
+        updateSchemaBadges();
+        renderResults(results);
+      } catch (err) {
+        document.getElementById('exec-time').textContent = 'Error';
+        showFeedback(`Error SQL: ${err.message}`, 'error');
+      }
+    }
+
+    function validateCurrentChallenge() {
+      const query = document.getElementById('sql-editor').value.trim();
+      if (!query) {
+        showFeedback("Escribe una consulta en el editor antes de validar.", "error");
+        return;
+      }
+
+      const lesson = lessons[currentLessonIndex];
+      const challenge = lesson.challenges[currentChallengeTab];
+
+      try {
+        const userRes = db.exec(query);
+        updateSchemaBadges();
+        renderResults(userRes);
+
+        if (challenge.isDDL) {
+          const check = challenge.validateCustom();
+          if (check.ok) {
+            markChallengeComplete(challenge.id);
+            showFeedback(check.msg, "success");
+          } else {
+            showFeedback(check.msg, "error");
+          }
+          return;
+        }
+
+        const expectedRes = db.exec(challenge.solutionQuery);
+        if (JSON.stringify(userRes) === JSON.stringify(expectedRes)) {
+          markChallengeComplete(challenge.id);
+          showFeedback(`¡Reto "${challenge.title}" superado!`, "success");
+        } else {
+          showFeedback("La consulta ejecutó sin errores, pero las columnas o filas no coinciden con lo solicitado.", "error");
+        }
+      } catch (err) {
+        showFeedback(`Error SQL: ${err.message}`, "error");
+      }
+    }
+
+    function markChallengeComplete(challengeId) {
+      const userData = getCurrentUserData();
+      if (!userData.completed.includes(challengeId)) {
+        userData.completed.push(challengeId);
+        saveLocalStore();
+        updateProgressUI();
+        loadLesson(currentLessonIndex, currentChallengeTab);
+        if (supabaseClient) pushToSupabase();
+      }
+    }
+
+    function updateProgressUI() {
+      const total = lessons.reduce((acc, l) => acc + l.challenges.length, 0);
+      const count = getCurrentUserData().completed.length;
+      document.getElementById('progress-text').textContent = `${count}/${total}`;
+      document.getElementById('progress-bar').style.width = `${Math.round((count / total) * 100)}%`;
+    }
+
+    function renderResults(results) {
+      const container = document.getElementById('results-container');
+      if (!results || results.length === 0) {
+        container.innerHTML = `
+          <div class="h-full flex items-center justify-center text-emerald-400 text-xs code-font">
+            ✓ Comando ejecutado correctamente (0 filas devueltas).
+          </div>`;
+        return;
+      }
+
+      const { columns, values } = results[0];
+      let html = `
+        <div class="border border-slate-800 rounded-lg overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-900 border-b border-slate-800 text-slate-300 code-font">
+                ${columns.map(col => `<th class="py-2.5 px-3 font-semibold whitespace-nowrap">${col}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 code-font">
+      `;
+
+      values.forEach(row => {
+        html += `<tr class="hover:bg-slate-900/60 transition">`;
+        row.forEach(val => {
+          const displayVal = val === null ? '<span class="text-slate-600 italic">NULL</span>' : val;
+          html += `<td class="py-2 px-3 text-slate-300 whitespace-nowrap">${displayVal}</td>`;
+        });
+        html += `</tr>`;
+      });
+
+      html += `</tbody></table></div>`;
+      container.innerHTML = html;
+    }
+
+    function showFeedback(msg, type) {
+      const banner = document.getElementById('feedback-banner');
+      banner.classList.remove('hidden', 'bg-emerald-950/90', 'text-emerald-300', 'border-emerald-800', 'bg-red-950/90', 'text-red-300', 'border-red-800', 'bg-slate-900', 'text-slate-300', 'border-slate-700');
+      
+      if (type === 'success') banner.classList.add('bg-emerald-950/90', 'text-emerald-300', 'border-emerald-800');
+      else if (type === 'error') banner.classList.add('bg-red-950/90', 'text-red-300', 'border-red-800');
+      else banner.classList.add('bg-slate-900', 'text-slate-300', 'border-slate-700');
+      
+      banner.innerHTML = `<span>${msg}</span><button onclick="hideFeedback()" class="opacity-70 hover:opacity-100 ml-4">✕</button>`;
+    }
+
+    function hideFeedback() {
+      document.getElementById('feedback-banner').classList.add('hidden');
+    }
+
+    // Final Exam Engine
+    function openExamModal() {
+      createFreshDB();
+      document.getElementById('exam-user-label').textContent = appStore.activeUser;
+      const modal = document.getElementById('exam-modal');
+      const body = document.getElementById('exam-body');
+      document.getElementById('submit-exam-btn').classList.remove('hidden');
+      document.getElementById('exam-status-text').textContent = "Las consultas SQL se evalúan contra el esquema limpio original.";
+
+      body.innerHTML = examQuestions.map((q, idx) => {
+        if (q.type === 'sql') {
+          return `
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5" id="exam-card-${q.id}">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-emerald-400 uppercase">Pregunta ${idx + 1} • Práctica SQL (${q.points} pts)</span>
+                <span class="text-xs font-bold" id="exam-badge-${q.id}"></span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">${q.prompt}</p>
+              <textarea id="exam-input-${q.id}" rows="3" spellcheck="false" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-emerald-300 code-font focus:outline-none focus:border-emerald-500" placeholder="SELECT ..."></textarea>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5" id="exam-card-${q.id}">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-indigo-400 uppercase">Pregunta ${idx + 1} • Arquitectura (${q.points} pts)</span>
+                <span class="text-xs font-bold" id="exam-badge-${q.id}"></span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">${q.prompt}</p>
+              <div class="space-y-1.5 pt-1">
+                ${q.options.map((opt, optIdx) => `
+                  <label class="flex items-start gap-2.5 p-2 rounded-lg bg-slate-900/70 hover:bg-slate-900 border border-slate-800 cursor-pointer text-xs text-slate-300">
+                    <input type="radio" name="exam-radio-${q.id}" value="${optIdx}" class="mt-0.5 accent-emerald-500">
+                    <span>${opt}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+
+      modal.classList.remove('hidden');
+      startExamTimer(15 * 60);
+    }
+
+    function closeExamModal() {
+      document.getElementById('exam-modal').classList.add('hidden');
+      clearInterval(examInterval);
+    }
+
+    function startExamTimer(seconds) {
+      clearInterval(examInterval);
+      let remaining = seconds;
+      const timerEl = document.getElementById('exam-timer');
+      
+      examInterval = setInterval(() => {
+        remaining--;
+        const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const s = String(remaining % 60).padStart(2, '0');
+        timerEl.textContent = `${m}:${s}`;
+        if (remaining <= 0) {
+          clearInterval(examInterval);
+          submitFinalExam();
+        }
+      }, 1000);
+    }
+
+    function submitFinalExam() {
+      clearInterval(examInterval);
+      let score = 0;
+      let maxScore = 0;
+
+      examQuestions.forEach(q => {
+        maxScore += q.points;
+        const badge = document.getElementById(`exam-badge-${q.id}`);
+        const card = document.getElementById(`exam-card-${q.id}`);
+
+        if (q.type === 'sql') {
+          const userSql = document.getElementById(`exam-input-${q.id}`).value.trim();
+          try {
+            if (!userSql) throw new Error("Vacío");
+            const userRes = db.exec(userSql);
+            const expectedRes = db.exec(q.expectedQuery);
+            if (JSON.stringify(userRes) === JSON.stringify(expectedRes)) {
+              score += q.points;
+              badge.innerHTML = `<span class="text-emerald-400">✓ +${q.points} pts</span>`;
+              card.classList.add('border-emerald-500/50');
+            } else {
+              badge.innerHTML = `<span class="text-red-400">✕ 0 pts</span>`;
+              card.classList.add('border-red-500/50');
+            }
+          } catch (e) {
+            badge.innerHTML = `<span class="text-red-400">✕ Error/Vacío</span>`;
+            card.classList.add('border-red-500/50');
+          }
+        } else {
+          const selected = document.querySelector(`input[name="exam-radio-${q.id}"]:checked`);
+          if (selected && Number(selected.value) === q.correctIndex) {
+            score += q.points;
+            badge.innerHTML = `<span class="text-emerald-400">✓ +${q.points} pts</span>`;
+            card.classList.add('border-emerald-500/50');
+          } else {
+            badge.innerHTML = `<span class="text-red-400">✕ 0 pts</span>`;
+            card.classList.add('border-red-500/50');
+          }
+        }
+      });
+
+      const percentage = Math.round((score / maxScore) * 100);
+      const passed = percentage >= 75;
+      
+      const userData = getCurrentUserData();
+      if (percentage > (userData.bestExamScore || 0)) {
+        userData.bestExamScore = percentage;
+        saveLocalStore();
+        if (supabaseClient) pushToSupabase();
+      }
+
+      document.getElementById('submit-exam-btn').classList.add('hidden');
+      document.getElementById('exam-status-text').innerHTML = passed
+        ? `<span class="text-emerald-400 font-bold">🎉 ¡Aprobado con ${score}/${maxScore} (${percentage}%)! Guardado en el perfil de ${appStore.activeUser}.</span>`
+        : `<span class="text-amber-400 font-bold">Obtuviste ${score}/${maxScore} (${percentage}%). Repasa los retos marcados en rojo e inténtalo de nuevo.</span>`;
+    }
+
+    document.getElementById('sql-editor').addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runUserQuery();
+      }
+    });
+
+    initApp();
+  </script>
+</body>
+</html>
