@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CS50 SQL Interactive Lab | Portfolio Edition</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -224,7 +225,6 @@
     let currentChallengeTab = 0;
     let examInterval = null;
 
-    // Multi-User State Store (Persisted in localStorage + Persistent Storage API + Optional Supabase)
     const STORAGE_KEY = 'cs50_sql_users_store_v3';
     const SB_CONFIG_KEY = 'cs50_sql_supabase_cfg';
 
@@ -247,7 +247,6 @@
       return appStore.users[appStore.activeUser];
     }
 
-    // Request Browser Persistent Storage so data isn't evicted after 7 days of inactivity
     async function requestDurableStorage() {
       const badge = document.getElementById('persistence-badge');
       if (navigator.storage && navigator.storage.persist) {
@@ -262,7 +261,6 @@
       }
     }
 
-    // User Management
     function renderUserDropdown() {
       const select = document.getElementById('user-select');
       select.innerHTML = Object.keys(appStore.users).map(u => 
@@ -295,7 +293,6 @@
       showFeedback(`Perfil "${cleanName}" creado y activado.`, 'success');
     }
 
-    // Export / Import JSON Backup
     function exportProgressJSON() {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appStore, null, 2));
       const dlAnchor = document.createElement('a');
@@ -331,7 +328,6 @@
       reader.readAsText(file);
     }
 
-    // Supabase Integration
     function initSupabaseFromStorage() {
       const cfg = JSON.parse(localStorage.getItem(SB_CONFIG_KEY) || 'null');
       if (cfg && cfg.url && cfg.key && window.supabase) {
@@ -388,7 +384,6 @@
 
       if (!error && data) {
         const localData = getCurrentUserData();
-        // Merge completed challenges without losing local work
         const merged = Array.from(new Set([...localData.completed, ...(data.completed_challenges || [])]));
         localData.completed = merged;
         localData.bestExamScore = Math.max(localData.bestExamScore || 0, data.exam_best_score || 0);
@@ -410,7 +405,6 @@
       document.getElementById('sync-modal').classList.add('hidden');
     }
 
-    // Seed Database (Real Estate & Land Portfolio Management)
     const INIT_SQL = `
       CREATE TABLE "agents" (
         "id" INTEGER PRIMARY KEY,
@@ -463,12 +457,11 @@
         (2, 7, 'Sarah Connor', 40500, '2026-11-02');
     `;
 
-    // 6 Modules with 3 Progressive Challenges each (18 total)
     const lessons = [
       {
         id: 0,
-        title: "Lecture 0: Querying",
-        subtitle: "SELECT, WHERE, LIKE, ORDER BY y Agregaciones",
+        title: `Lecture 0: Querying`,
+        subtitle: `SELECT, WHERE, LIKE, ORDER BY y Agregaciones`,
         content: `
           <p class="text-slate-300 leading-relaxed">SQL permite consultar millones de filas usando algoritmos optimizados. A diferencia de una hoja de cálculo donde buscas con Ctrl+F, SQL filtra, ordena y agrega datos declarativamente.</p>
           <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
@@ -496,33 +489,33 @@
           {
             id: "L0_C1",
             level: "Fácil",
-            title: "Lotes disponibles en Texas",
-            description: "Obtén el <code>title</code> y <code>price</code> de todas las propiedades en <code>'Texas'</code> cuyo estado sea <code>'Available'</code>.",
-            hint: "SELECT \"title\", \"price\" FROM \"properties\" WHERE \"state\" = 'Texas' AND \"status\" = 'Available';",
+            title: `Lotes disponibles en Texas`,
+            description: `Obtén el <code>title</code> y <code>price</code> de todas las propiedades en <code>'Texas'</code> cuyo estado sea <code>'Available'</code>.`,
+            hint: `SELECT "title", "price" FROM "properties" WHERE "state" = 'Texas' AND "status" = 'Available';`,
             solutionQuery: `SELECT "title", "price" FROM "properties" WHERE "state" = 'Texas' AND "status" = 'Available';`
           },
           {
             id: "L0_C2",
             level: "Medio",
-            title: "Sin video de dron y ordenados",
-            description: "Lista el <code>title</code>, <code>state</code> y <code>acres</code> de las propiedades que NO tienen <code>drone_video</code> (es <code>NULL</code>) y tienen al menos <code>5.0</code> acres, ordenadas de mayor a menor <code>acres</code>.",
-            hint: "Usa WHERE \"drone_video\" IS NULL AND \"acres\" >= 5.0 ORDER BY \"acres\" DESC",
+            title: `Sin video de dron y ordenados`,
+            description: `Lista el <code>title</code>, <code>state</code> y <code>acres</code> de las propiedades que NO tienen <code>drone_video</code> (es <code>NULL</code>) y tienen al menos <code>5.0</code> acres, ordenadas de mayor a menor <code>acres</code>.`,
+            hint: `Usa WHERE "drone_video" IS NULL AND "acres" >= 5.0 ORDER BY "acres" DESC`,
             solutionQuery: `SELECT "title", "state", "acres" FROM "properties" WHERE "drone_video" IS NULL AND "acres" >= 5.0 ORDER BY "acres" DESC;`
           },
           {
             id: "L0_C3",
             level: "Difícil",
-            title: "Métricas de inventario disponible",
-            description: "Calcula en una sola fila cuántos condados (<code>county</code>) distintos tienen propiedades <code>'Available'</code> (alias <code>total_counties</code>) y el precio máximo entre ellas (alias <code>max_price</code>).",
-            hint: "SELECT COUNT(DISTINCT \"county\") AS \"total_counties\", MAX(\"price\") AS \"max_price\" FROM \"properties\" WHERE \"status\" = 'Available';",
+            title: `Métricas de inventario disponible`,
+            description: `Calcula en una sola fila cuántos condados (<code>county</code>) distintos tienen propiedades <code>'Available'</code> (alias <code>total_counties</code>) y el precio máximo entre ellas (alias <code>max_price</code>).`,
+            hint: `SELECT COUNT(DISTINCT "county") AS "total_counties", MAX("price") AS "max_price" FROM "properties" WHERE "status" = 'Available';`,
             solutionQuery: `SELECT COUNT(DISTINCT "county") AS "total_counties", MAX("price") AS "max_price" FROM "properties" WHERE "status" = 'Available';`
           }
         ]
       },
       {
         id: 1,
-        title: "Lecture 1: Relating",
-        subtitle: "Llaves, Subqueries, JOINs, Sets y GROUP BY",
+        title: `Lecture 1: Relating`,
+        subtitle: `Llaves, Subqueries, JOINs, Sets y GROUP BY`,
         content: `
           <p class="text-slate-300 leading-relaxed">Para evitar redundancia, cada entidad vive en su propia tabla y se conecta mediante <strong>Primary Keys</strong> y <strong>Foreign Keys</strong>.</p>
           <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
@@ -550,33 +543,33 @@
           {
             id: "L1_C1",
             level: "Fácil",
-            title: "Subquery por región",
-            description: "Usando una <strong>subquery</strong> (sin JOIN), obtén el <code>title</code> y <code>state</code> de las propiedades asignadas a agentes de la región <code>'Southwest'</code>.",
-            hint: "WHERE \"agent_id\" IN (SELECT \"id\" FROM \"agents\" WHERE \"region\" = 'Southwest')",
+            title: `Subquery por región`,
+            description: `Usando una <strong>subquery</strong> (sin JOIN), obtén el <code>title</code> y <code>state</code> de las propiedades asignadas a agentes de la región <code>'Southwest'</code>.`,
+            hint: `WHERE "agent_id" IN (SELECT "id" FROM "agents" WHERE "region" = 'Southwest')`,
             solutionQuery: `SELECT "title", "state" FROM "properties" WHERE "agent_id" IN (SELECT "id" FROM "agents" WHERE "region" = 'Southwest');`
           },
           {
             id: "L1_C2",
             level: "Medio",
-            title: "JOIN de Ventas y Agentes",
-            description: "Une <code>sales</code>, <code>properties</code> y <code>agents</code> para mostrar <code>sales.buyer_name</code>, <code>properties.title</code> y <code>agents.name</code> (alias <code>agent_name</code>).",
-            hint: "Encadena dos JOIN: sales -> properties ON sales.property_id = properties.id -> agents ON properties.agent_id = agents.id",
+            title: `JOIN de Ventas y Agentes`,
+            description: `Une <code>sales</code>, <code>properties</code> y <code>agents</code> para mostrar <code>sales.buyer_name</code>, <code>properties.title</code> y <code>agents.name</code> (alias <code>agent_name</code>).`,
+            hint: `Encadena dos JOIN: sales -> properties ON sales.property_id = properties.id -> agents ON properties.agent_id = agents.id`,
             solutionQuery: `SELECT "sales"."buyer_name", "properties"."title", "agents"."name" AS "agent_name" FROM "sales" JOIN "properties" ON "sales"."property_id" = "properties"."id" JOIN "agents" ON "properties"."agent_id" = "agents"."id";`
           },
           {
             id: "L1_C3",
             level: "Difícil",
-            title: "Portafolio activo por agente",
-            description: "Muestra <code>agents.name</code> y el valor total de sus propiedades disponibles (<code>SUM(properties.price)</code> como <code>portfolio_value</code>), filtrando solo agentes con un valor disponible mayor a <code>50000</code>.",
-            hint: "Filtra WHERE properties.status = 'Available', agrupa por agents.name y usa HAVING portfolio_value > 50000",
+            title: `Portafolio activo por agente`,
+            description: `Muestra <code>agents.name</code> y el valor total de sus propiedades disponibles (<code>SUM(properties.price)</code> como <code>portfolio_value</code>), filtrando solo agentes con un valor disponible mayor a <code>50000</code>.`,
+            hint: `Filtra WHERE properties.status = 'Available', agrupa por agents.name y usa HAVING portfolio_value > 50000`,
             solutionQuery: `SELECT "agents"."name", SUM("properties"."price") AS "portfolio_value" FROM "agents" JOIN "properties" ON "agents"."id" = "properties"."agent_id" WHERE "properties"."status" = 'Available' GROUP BY "agents"."name" HAVING "portfolio_value" > 50000;`
           }
         ]
       },
       {
         id: 2,
-        title: "Lecture 2: Designing",
-        subtitle: "Normalización, Tipos y Constraints",
+        title: `Lecture 2: Designing`,
+        subtitle: `Normalización, Tipos y Constraints`,
         content: `
           <p class="text-slate-300 leading-relaxed">Normalizar significa dividir tablas monolíticas en entidades independientes. Las restricciones (<em>constraints</em>) actúan como reglas de validación en la base de datos.</p>
           <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
@@ -599,9 +592,9 @@
           {
             id: "L2_C1",
             level: "Fácil",
-            title: "Tabla de Clientes Potenciales (Leads)",
-            description: "Crea una tabla llamada <code>leads</code> con: <code>id</code> (INTEGER PRIMARY KEY), <code>full_name</code> (TEXT NOT NULL) y <code>email</code> (TEXT NOT NULL UNIQUE).",
-            hint: "CREATE TABLE \"leads\" (\"id\" INTEGER PRIMARY KEY, \"full_name\" TEXT NOT NULL, \"email\" TEXT NOT NULL UNIQUE);",
+            title: `Tabla de Clientes Potenciales (Leads)`,
+            description: `Crea una tabla llamada <code>leads</code> con: <code>id</code> (INTEGER PRIMARY KEY), <code>full_name</code> (TEXT NOT NULL) y <code>email</code> (TEXT NOT NULL UNIQUE).`,
+            hint: `CREATE TABLE "leads" ("id" INTEGER PRIMARY KEY, "full_name" TEXT NOT NULL, "email" TEXT NOT NULL UNIQUE);`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='leads';`);
@@ -616,9 +609,9 @@
           {
             id: "L2_C2",
             level: "Medio",
-            title: "Tabla con CHECK y FOREIGN KEY",
-            description: "Crea una tabla <code>offers</code> con: <code>id</code> (INTEGER PRIMARY KEY), <code>property_id</code> (INTEGER con FOREIGN KEY a <code>properties(id)</code>), y <code>offer_amount</code> (INTEGER NOT NULL CHECK(<code>offer_amount</code> > 0)).",
-            hint: "Incluye CHECK(\"offer_amount\" > 0) y FOREIGN KEY(\"property_id\") REFERENCES \"properties\"(\"id\")",
+            title: `Tabla con CHECK y FOREIGN KEY`,
+            description: `Crea una tabla <code>offers</code> con: <code>id</code> (INTEGER PRIMARY KEY), <code>property_id</code> (INTEGER con FOREIGN KEY a <code>properties(id)</code>), y <code>offer_amount</code> (INTEGER NOT NULL CHECK(<code>offer_amount</code> > 0)).`,
+            hint: `Incluye CHECK("offer_amount" > 0) y FOREIGN KEY("property_id") REFERENCES "properties"("id")`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='offers';`);
@@ -633,9 +626,9 @@
           {
             id: "L2_C3",
             level: "Difícil",
-            title: "Evolucionar esquema con ALTER TABLE",
-            description: "Agrega una nueva columna llamada <code>zoning</code> de tipo <code>TEXT</code> con valor por defecto <code>'Agricultural'</code> a la tabla existente <code>properties</code>.",
-            hint: "ALTER TABLE \"properties\" ADD COLUMN \"zoning\" TEXT DEFAULT 'Agricultural';",
+            title: `Evolucionar esquema con ALTER TABLE`,
+            description: `Agrega una nueva columna llamada <code>zoning</code> de tipo <code>TEXT</code> con valor por defecto <code>'Agricultural'</code> a la tabla existente <code>properties</code>.`,
+            hint: `ALTER TABLE "properties" ADD COLUMN "zoning" TEXT DEFAULT 'Agricultural';`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`PRAGMA table_info("properties");`);
@@ -650,8 +643,8 @@
       },
       {
         id: 3,
-        title: "Lecture 3: Writing",
-        subtitle: "INSERT, UPDATE, DELETE, Triggers y Soft Deletes",
+        title: `Lecture 3: Writing`,
+        subtitle: `INSERT, UPDATE, DELETE, Triggers y Soft Deletes`,
         content: `
           <p class="text-slate-300 leading-relaxed">Manipulación de datos y automatización mediante <strong>Triggers</strong>. En sistemas reales, rara vez se usa <code>DELETE</code> físico; se prefiere <em>Soft Delete</em> para conservar auditoría.</p>
           <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
@@ -674,9 +667,9 @@
           {
             id: "L3_C1",
             level: "Fácil",
-            title: "Inserción múltiple en una sentencia",
-            description: "Inserta en una sola instrucción <code>INSERT INTO</code> dos nuevos agentes en <code>agents</code>: <code>'Diego Silva'</code> (región <code>'Northwest'</code>) y <code>'Laura Gómez'</code> (región <code>'Midwest'</code>).",
-            hint: "INSERT INTO \"agents\" (\"name\", \"region\") VALUES ('Diego Silva', 'Northwest'), ('Laura Gómez', 'Midwest');",
+            title: `Inserción múltiple en una sentencia`,
+            description: `Inserta en una sola instrucción <code>INSERT INTO</code> dos nuevos agentes en <code>agents</code>: <code>'Diego Silva'</code> (región <code>'Northwest'</code>) y <code>'Laura Gómez'</code> (región <code>'Midwest'</code>).`,
+            hint: `INSERT INTO "agents" ("name", "region") VALUES ('Diego Silva', 'Northwest'), ('Laura Gómez', 'Midwest');`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT * FROM "agents" WHERE "name" IN ('Diego Silva', 'Laura Gómez');`);
@@ -689,9 +682,9 @@
           {
             id: "L3_C2",
             level: "Medio",
-            title: "Soft Delete de propiedad",
-            description: "Realiza un <em>Soft Delete</em> sobre la propiedad <code>'Blue Ridge Timber'</code> actualizando su columna <code>status</code> a <code>'Archived'</code>.",
-            hint: "UPDATE \"properties\" SET \"status\" = 'Archived' WHERE \"title\" = 'Blue Ridge Timber';",
+            title: `Soft Delete de propiedad`,
+            description: `Realiza un <em>Soft Delete</em> sobre la propiedad <code>'Blue Ridge Timber'</code> actualizando su columna <code>status</code> a <code>'Archived'</code>.`,
+            hint: `UPDATE "properties" SET "status" = 'Archived' WHERE "title" = 'Blue Ridge Timber';`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT "status" FROM "properties" WHERE "title" = 'Blue Ridge Timber';`);
@@ -704,9 +697,9 @@
           {
             id: "L3_C3",
             level: "Difícil",
-            title: "Automatizar ventas con TRIGGER",
-            description: "Crea un trigger llamado <code>sync_property_sold</code> que se ejecute <code>AFTER INSERT ON "sales"</code> y actualice automáticamente <code>status = 'Sold'</code> en <code>properties</code> donde <code>id = NEW."property_id"</code>.",
-            hint: "CREATE TRIGGER \"sync_property_sold\" AFTER INSERT ON \"sales\" BEGIN UPDATE \"properties\" SET \"status\" = 'Sold' WHERE \"id\" = NEW.\"property_id\"; END;",
+            title: `Automatizar ventas con TRIGGER`,
+            description: `Crea un trigger llamado <code>sync_property_sold</code> que se ejecute <code>AFTER INSERT ON "sales"</code> y actualice automáticamente <code>status = 'Sold'</code> en <code>properties</code> donde <code>id = NEW."property_id"</code>.`,
+            hint: `CREATE TRIGGER "sync_property_sold" AFTER INSERT ON "sales" BEGIN UPDATE "properties" SET "status" = 'Sold' WHERE "id" = NEW."property_id"; END;`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT name FROM sqlite_master WHERE type='trigger' AND name='sync_property_sold';`);
@@ -725,8 +718,8 @@
       },
       {
         id: 4,
-        title: "Lecture 4: Viewing",
-        subtitle: "Views, CTEs, Particionamiento y Seguridad",
+        title: `Lecture 4: Viewing`,
+        subtitle: `Views, CTEs, Particionamiento y Seguridad`,
         content: `
           <p class="text-slate-300 leading-relaxed">Las <strong>Views</strong> son consultas guardadas que se comportan como tablas virtuales. Simplifican el código, particionan datos y protegen información confidencial (PII).</p>
           <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
@@ -749,9 +742,9 @@
           {
             id: "L4_C1",
             level: "Fácil",
-            title: "Vista particionada de disponibles",
-            description: "Crea una vista llamada <code>available_inventory</code> que seleccione <code>id</code>, <code>title</code>, <code>state</code> y <code>price</code> únicamente de las propiedades con <code>status = 'Available'</code>.",
-            hint: "CREATE VIEW \"available_inventory\" AS SELECT \"id\", \"title\", \"state\", \"price\" FROM \"properties\" WHERE \"status\" = 'Available';",
+            title: `Vista particionada de disponibles`,
+            description: `Crea una vista llamada <code>available_inventory</code> que seleccione <code>id</code>, <code>title</code>, <code>state</code> y <code>price</code> únicamente de las propiedades con <code>status = 'Available'</code>.`,
+            hint: `CREATE VIEW "available_inventory" AS SELECT "id", "title", "state", "price" FROM "properties" WHERE "status" = 'Available';`,
             isDDL: true,
             validateCustom: () => {
               try {
@@ -769,9 +762,9 @@
           {
             id: "L4_C2",
             level: "Medio",
-            title: "Vista anonimizada (Seguridad PII)",
-            description: "Crea una vista llamada <code>anonymized_sales</code> que muestre <code>id</code>, <code>property_id</code>, <code>sale_price</code> y una columna literal <code>'Confidential'</code> con alias <code>buyer_name</code>.",
-            hint: "CREATE VIEW \"anonymized_sales\" AS SELECT \"id\", \"property_id\", \"sale_price\", 'Confidential' AS \"buyer_name\" FROM \"sales\";",
+            title: `Vista anonimizada (Seguridad PII)`,
+            description: `Crea una vista llamada <code>anonymized_sales</code> que muestre <code>id</code>, <code>property_id</code>, <code>sale_price</code> y una columna literal <code>'Confidential'</code> con alias <code>buyer_name</code>.`,
+            hint: `CREATE VIEW "anonymized_sales" AS SELECT "id", "property_id", "sale_price", 'Confidential' AS "buyer_name" FROM "sales";`,
             isDDL: true,
             validateCustom: () => {
               try {
@@ -788,17 +781,17 @@
           {
             id: "L4_C3",
             level: "Difícil",
-            title: "Consulta de dos niveles con CTE",
-            description: "Escribe una consulta con un <strong>CTE</strong> llamado <code>state_totals</code> que calcule la suma de <code>price</code> por <code>state</code> (como <code>total_val</code>), y luego en el <code>SELECT</code> principal obtén el promedio redondeado a 2 decimales de <code>total_val</code> (alias <code>avg_state_portfolio</code>).",
-            hint: "WITH \"state_totals\" AS (SELECT \"state\", SUM(\"price\") AS \"total_val\" FROM \"properties\" GROUP BY \"state\") SELECT ROUND(AVG(\"total_val\"), 2) AS \"avg_state_portfolio\" FROM \"state_totals\";",
+            title: `Consulta de dos niveles con CTE`,
+            description: `Escribe una consulta con un <strong>CTE</strong> llamado <code>state_totals</code> que calcule la suma de <code>price</code> por <code>state</code> (como <code>total_val</code>), y luego en el <code>SELECT</code> principal obtén el promedio redondeado a 2 decimales de <code>total_val</code> (alias <code>avg_state_portfolio</code>).`,
+            hint: `WITH "state_totals" AS (SELECT "state", SUM("price") AS "total_val" FROM "properties" GROUP BY "state") SELECT ROUND(AVG("total_val"), 2) AS "avg_state_portfolio" FROM "state_totals";`,
             solutionQuery: `WITH "state_totals" AS (SELECT "state", SUM("price") AS "total_val" FROM "properties" GROUP BY "state") SELECT ROUND(AVG("total_val"), 2) AS "avg_state_portfolio" FROM "state_totals";`
           }
         ]
       },
       {
         id: 5,
-        title: "Lecture 5 & 6: Optimizing & Scaling",
-        subtitle: "Índices (B-Trees), Transacciones ACID y Escala",
+        title: `Lecture 5 & 6: Optimizing & Scaling`,
+        subtitle: `Índices (B-Trees), Transacciones ACID y Escala`,
         content: `
           <p class="text-slate-300 leading-relaxed">Optimizar consiste en evitar escaneos completos de tabla (<code>SCAN</code>) mediante árboles balanceados (<strong>B-Trees</strong>) y garantizar atomicidad en operaciones críticas con transacciones.</p>
           <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-2">
@@ -822,9 +815,9 @@
           {
             id: "L5_C1",
             level: "Fácil",
-            title: "Índice simple por estado",
-            description: "Crea un índice llamado <code>idx_state</code> sobre la columna <code>state</code> de la tabla <code>properties</code>.",
-            hint: "CREATE INDEX \"idx_state\" ON \"properties\" (\"state\");",
+            title: `Índice simple por estado`,
+            description: `Crea un índice llamado <code>idx_state</code> sobre la columna <code>state</code> de la tabla <code>properties</code>.`,
+            hint: `CREATE INDEX "idx_state" ON "properties" ("state");`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_state';`);
@@ -837,9 +830,9 @@
           {
             id: "L5_C2",
             level: "Medio",
-            title: "Índice Parcial para inventario activo",
-            description: "Crea un índice parcial llamado <code>idx_available_price</code> sobre <code>properties(price)</code> únicamente para las filas donde <code>status = 'Available'</code>.",
-            hint: "CREATE INDEX \"idx_available_price\" ON \"properties\" (\"price\") WHERE \"status\" = 'Available';",
+            title: `Índice Parcial para inventario activo`,
+            description: `Crea un índice parcial llamado <code>idx_available_price</code> sobre <code>properties(price)</code> únicamente para las filas donde <code>status = 'Available'</code>.`,
+            hint: `CREATE INDEX "idx_available_price" ON "properties" ("price") WHERE "status" = 'Available';`,
             isDDL: true,
             validateCustom: () => {
               const res = db.exec(`SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_available_price';`);
@@ -852,9 +845,9 @@
           {
             id: "L5_C3",
             level: "Difícil",
-            title: "Transacción Atómica de Venta",
-            description: "Ejecuta una transacción completa (<code>BEGIN TRANSACTION; ... COMMIT;</code>) que inserte una venta para <code>property_id = 4</code>, comprador <code>'Elena Gilbert'</code>, <code>sale_price = 59000</code>, y actualice en <code>properties</code> su <code>status = 'Sold'</code>.",
-            hint: "BEGIN TRANSACTION; INSERT INTO \"sales\" ...; UPDATE \"properties\" SET \"status\" = 'Sold' WHERE \"id\" = 4; COMMIT;",
+            title: `Transacción Atómica de Venta`,
+            description: `Ejecuta una transacción completa (<code>BEGIN TRANSACTION; ... COMMIT;</code>) que inserte una venta para <code>property_id = 4</code>, comprador <code>'Elena Gilbert'</code>, <code>sale_price = 59000</code>, y actualice en <code>properties</code> su <code>status = 'Sold'</code>.`,
+            hint: `BEGIN TRANSACTION; INSERT INTO "sales" ("property_id", "buyer_name", "sale_price") VALUES (4, 'Elena Gilbert', 59000); UPDATE "properties" SET "status" = 'Sold' WHERE "id" = 4; COMMIT;`,
             isDDL: true,
             validateCustom: () => {
               const s = db.exec(`SELECT * FROM "sales" WHERE "property_id" = 4 AND "buyer_name" = 'Elena Gilbert';`);
@@ -869,45 +862,44 @@
       }
     ];
 
-    // Final Exam Questions
     const examQuestions = [
       {
         id: "Q1",
         type: "sql",
         points: 15,
-        prompt: "Escribe una consulta que devuelva el <code>title</code> y <code>acres</code> de las propiedades en <code>'Arizona'</code> o <code>'Texas'</code> con más de <code>11</code> acres, ordenadas por <code>acres</code> descendente.",
+        prompt: `Escribe una consulta que devuelva el <code>title</code> y <code>acres</code> de las propiedades en <code>'Arizona'</code> o <code>'Texas'</code> con más de <code>11</code> acres, ordenadas por <code>acres</code> descendente.`,
         expectedQuery: `SELECT "title", "acres" FROM "properties" WHERE ("state" = 'Arizona' OR "state" = 'Texas') AND "acres" > 11 ORDER BY "acres" DESC;`
       },
       {
         id: "Q2",
         type: "sql",
         points: 15,
-        prompt: "Calcula cuántos lotes tiene cada agente asignado. Muestra <code>agents.name</code> y el conteo como <code>total_lots</code> (incluye solo agentes que tengan al menos 2 lotes).",
+        prompt: `Calcula cuántos lotes tiene cada agente asignado. Muestra <code>agents.name</code> y el conteo como <code>total_lots</code> (incluye solo agentes que tengan al menos 2 lotes).`,
         expectedQuery: `SELECT "agents"."name", COUNT("properties"."id") AS "total_lots" FROM "agents" JOIN "properties" ON "agents"."id" = "properties"."agent_id" GROUP BY "agents"."name" HAVING "total_lots" >= 2;`
       },
       {
         id: "Q3",
         type: "sql",
         points: 15,
-        prompt: "Usando un operador de conjuntos (<code>EXCEPT</code>), obtén los <code>id</code> de todas las propiedades en <code>properties</code> que todavía NO aparecen en la tabla <code>sales</code>.",
+        prompt: `Usando un operador de conjuntos (<code>EXCEPT</code>), obtén los <code>id</code> de todas las propiedades en <code>properties</code> que todavía NO aparecen en la tabla <code>sales</code>.`,
         expectedQuery: `SELECT "id" FROM "properties" EXCEPT SELECT "property_id" FROM "sales";`
       },
       {
         id: "Q4",
         type: "sql",
         points: 15,
-        prompt: "Calcula la comisión estimada de cada venta (<code>sales.sale_price * agents.commission_rate</code> redondeada a 2 decimales con alias <code>commission</code>) junto con <code>agents.name</code>.",
+        prompt: `Calcula la comisión estimada de cada venta (<code>sales.sale_price * agents.commission_rate</code> redondeada a 2 decimales con alias <code>commission</code>) junto con <code>agents.name</code>.`,
         expectedQuery: `SELECT "agents"."name", ROUND("sales"."sale_price" * "agents"."commission_rate", 2) AS "commission" FROM "sales" JOIN "properties" ON "sales"."property_id" = "properties"."id" JOIN "agents" ON "properties"."agent_id" = "agents"."id";`
       },
       {
         id: "Q5",
         type: "mcq",
         points: 10,
-        prompt: "¿Por qué crear índices en TODAS las columnas de una tabla con millones de registros suele ser una mala decisión de arquitectura?",
+        prompt: `¿Por qué crear índices en TODAS las columnas de una tabla con millones de registros suele ser una mala decisión de arquitectura?`,
         options: [
-          "Porque SQLite solo permite un máximo de 2 índices por tabla.",
-          "Porque cada índice ocupa espacio adicional en disco (B-Tree) y ralentiza las operaciones de escritura (INSERT, UPDATE, DELETE).",
-          "Porque los índices bloquean las consultas SELECT simultáneas."
+          `Porque SQLite solo permite un máximo de 2 índices por tabla.`,
+          `Porque cada índice ocupa espacio adicional en disco (B-Tree) y ralentiza las operaciones de escritura (INSERT, UPDATE, DELETE).`,
+          `Porque los índices bloquean las consultas SELECT simultáneas.`
         ],
         correctIndex: 1
       },
@@ -915,11 +907,11 @@
         id: "Q6",
         type: "mcq",
         points: 10,
-        prompt: "¿Cuál es la diferencia fundamental entre las cláusulas WHERE y HAVING?",
+        prompt: `¿Cuál es la diferencia fundamental entre las cláusulas WHERE y HAVING?`,
         options: [
-          "WHERE filtra filas individuales antes de agrupar; HAVING filtra grupos resultantes después de aplicar GROUP BY.",
-          "HAVING solo funciona con números enteros y WHERE solo con cadenas de texto.",
-          "No existe diferencia; son sinónimos intercambiables en el estándar ANSI SQL."
+          `WHERE filtra filas individuales antes de agrupar; HAVING filtra grupos resultantes después de aplicar GROUP BY.`,
+          `HAVING solo funciona con números enteros y WHERE solo con cadenas de texto.`,
+          `No existe diferencia; son sinónimos intercambiables en el estándar ANSI SQL.`
         ],
         correctIndex: 0
       },
@@ -927,11 +919,11 @@
         id: "Q7",
         type: "mcq",
         points: 10,
-        prompt: "¿Qué propiedad ACID garantiza que si una transferencia bancaria falla a mitad de camino (tras sumar a una cuenta pero antes de restar a la otra), ningún cambio quede guardado?",
+        prompt: `¿Qué propiedad ACID garantiza que si una transferencia bancaria falla a mitad de camino (tras sumar a una cuenta pero antes de restar a la otra), ningún cambio quede guardado?`,
         options: [
-          "Isolation (Aislamiento)",
-          "Durability (Durabilidad)",
-          "Atomicity (Atomicidad)"
+          `Isolation (Aislamiento)`,
+          `Durability (Durabilidad)`,
+          `Atomicity (Atomicidad)`
         ],
         correctIndex: 2
       },
@@ -939,17 +931,16 @@
         id: "Q8",
         type: "mcq",
         points: 10,
-        prompt: "¿Cuál es la defensa estándar contra ataques de SQL Injection en aplicaciones conectadas a MySQL o PostgreSQL?",
+        prompt: `¿Cuál es la defensa estándar contra ataques de SQL Injection en aplicaciones conectadas a MySQL o PostgreSQL?`,
         options: [
-          "Usar COMILLAS DOBLES alrededor de todas las contraseñas.",
-          "Utilizar Prepared Statements (consultas parametrizadas con placeholders como ? o $1) en lugar de concatenar strings.",
-          "Ejecutar el comando VACUUM después de cada inicio de sesión."
+          `Usar COMILLAS DOBLES alrededor de todas las contraseñas.`,
+          `Utilizar Prepared Statements (consultas parametrizadas con placeholders como ? o $1) en lugar de concatenar strings.`,
+          `Ejecutar el comando VACUUM después de cada inicio de sesión.`
         ],
         correctIndex: 1
       }
     ];
 
-    // Initialize App
     async function initApp() {
       await requestDurableStorage();
       renderUserDropdown();
@@ -978,7 +969,6 @@
       renderResults([]);
     }
 
-    // CSV Parser & Dynamic Table Creator
     function handleCSVUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -1281,7 +1271,6 @@
       document.getElementById('feedback-banner').classList.add('hidden');
     }
 
-    // Final Exam Engine
     function openExamModal() {
       createFreshDB();
       document.getElementById('exam-user-label').textContent = appStore.activeUser;
